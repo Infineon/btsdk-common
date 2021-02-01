@@ -1,10 +1,10 @@
 /*
- * Copyright 2016-2020, Cypress Semiconductor Corporation or a subsidiary of
- * Cypress Semiconductor Corporation. All Rights Reserved.
+ * Copyright 2016-2021, Cypress Semiconductor Corporation (an Infineon company) or
+ * an affiliate of Cypress Semiconductor Corporation.  All rights reserved.
  *
  * This software, including source code, documentation and related
- * materials ("Software"), is owned by Cypress Semiconductor Corporation
- * or one of its subsidiaries ("Cypress") and is protected by and subject to
+ * materials ("Software") is owned by Cypress Semiconductor Corporation
+ * or one of its affiliates ("Cypress") and is protected by and subject to
  * worldwide patent protection (United States and foreign),
  * United States copyright laws and international treaty provisions.
  * Therefore, you may use this Software only as provided in the license
@@ -13,7 +13,7 @@
  * If no EULA applies, Cypress hereby grants you a personal, non-exclusive,
  * non-transferable license to copy, modify, and compile the Software
  * source code solely for use in connection with Cypress's
- * integrated circuit products. Any reproduction, modification, translation,
+ * integrated circuit products.  Any reproduction, modification, translation,
  * compilation, or representation of this Software except as specified
  * above is prohibited without the express written permission of Cypress.
  *
@@ -41,7 +41,7 @@
 #include "wiced_platform.h"
 #if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW20719B1 || CYW20719B0
 #include "wiced_hal_eflash.h"
-#elif CYW20706A2 || CYW20735B1  || CYW43012C0 || CYW20835B1 || CYW55572A0
+#elif CYW20706A2 || CYW20735B1  || CYW43012C0 || CYW20835B1 || BTSTACK_VER >= 0x01020000
 #include "wiced_hal_sflash.h"
 #endif
 #include "wiced_bt_factory_app_config.h"
@@ -89,7 +89,7 @@ uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16
         {
 #if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW20719B1 || CYW20719B0
             if(WICED_SUCCESS != wiced_hal_eflash_read(offset, (uint8_t *)flash_read_buffer, sizeof(flash_read_buffer)))
-#elif CYW20706A2 || CYW20735B1  || CYW43012C0 || CYW20835B1 || CYW55572A0
+#elif CYW20706A2 || CYW20735B1  || CYW43012C0 || CYW20835B1 || BTSTACK_VER >= 0x01020000
             if(sizeof(flash_read_buffer) != wiced_hal_sflash_read(offset, sizeof(flash_read_buffer), (uint8_t *)flash_read_buffer))
 #else
 #(error unexpected device type)
