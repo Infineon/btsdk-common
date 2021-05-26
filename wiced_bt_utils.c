@@ -36,6 +36,8 @@
 
 #include "wiced_bt_utils.h"
 #include "string.h"
+#include "wiced_bt_dev.h"
+#include "wiced_bt_trace.h"
 
 #ifdef WICED_X
 #ifndef __LONG_MAX__
@@ -68,25 +70,25 @@ BD_ADDR bd_addr_null= {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 // Currently only used here.  If necessary, can be exposed by removing static inline
 //
 static inline int
-isupper(char c)
+wiced_bt_utils_isupper(char c)
 {
     return (c >= 'A' && c <= 'Z');
 }
 
 static inline int
-isalpha(char c)
+wiced_bt_utils_isalpha(char c)
 {
     return ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'));
 }
 
 static inline int
-isspace(char c)
+wiced_bt_utils_isspace(char c)
 {
     return (c == ' ' || c == '\t' || c == '\n' || c == '\12');
 }
 
 static inline int
-isdigit(char c)
+wiced_bt_utils_isdigit(char c)
 {
     return (c >= '0' && c <= '9');
 }
@@ -290,7 +292,7 @@ unsigned long utl_strtoul(const char *nptr, char **endptr, int base)
      s = nptr;
      do {
          c = (unsigned char) *s++;
-     } while (isspace(c));
+     } while (wiced_bt_utils_isspace(c));
      if (c == '-') {
          neg = 1;
          c = *s++;
@@ -309,10 +311,10 @@ unsigned long utl_strtoul(const char *nptr, char **endptr, int base)
      cutoff = ULONG_MAX / (unsigned long) base;
      cutlim = ULONG_MAX % (unsigned long) base;
      for (acc = 0, any = 0;; c = (unsigned char) *s++) {
-         if (isdigit(c))
+         if (wiced_bt_utils_isdigit(c))
              c -= '0';
-         else if (isalpha(c))
-             c -= isupper(c) ? 'A' - 10 : 'a' - 10;
+         else if (wiced_bt_utils_isalpha(c))
+             c -= wiced_bt_utils_isupper(c) ? 'A' - 10 : 'a' - 10;
          else
              break;
          if (c >= base)
@@ -406,4 +408,44 @@ void utl_freebuf(void **p)
         GKI_freebuf(*p);
         *p = NULL;
     }
+}
+
+/*******************************************************************
+ * Function         wiced_bt_read_raw_rssi
+ *
+ *                  returns the raw or actual RSSI
+ *
+ * @param[in]       connection_handle   : peer connection handle
+ * @param[in]       p_callback_in       : application callback to receive RSSI
+ *
+ * @return          void
+*******************************************************************/
+wiced_bt_read_raw_rssi_command_complete_cback_t * p_callback = NULL;
+void read_raw_rssi_callback(wiced_bt_dev_vendor_specific_command_complete_params_t *p_cmd_cplt_param)
+{
+    uint8_t* p_data = p_cmd_cplt_param->p_param_buf;
+    WICED_BT_TRACE("opcode: %x\n", p_cmd_cplt_param->opcode);       //opcode 0xfc48
+    WICED_BT_TRACE("param_len: %x\n", p_cmd_cplt_param->param_len); //length
+    WICED_BT_TRACE("p_data - %02x\n", p_data[0]);                   //status
+    WICED_BT_TRACE("p_data - %02x %02x\n", p_data[1], p_data[2]);   //connection_handle
+    WICED_BT_TRACE("p_data - %02x (%d dB)\n", p_data[3], (signed char) p_data[3]); //rssi
+    if(p_callback)
+        p_callback(p_cmd_cplt_param);
+}
+
+#define opcode_vsc_read_raw_rssi 0xFC48
+wiced_bt_dev_status_t wiced_bt_read_raw_rssi(uint16_t connection_handle, wiced_bt_read_raw_rssi_command_complete_cback_t *p_callback_in)
+{
+    wiced_bt_dev_status_t bt_status = WICED_BT_ERROR;
+    uint8_t  buffer[2];
+    uint8_t  *p = buffer;
+    p_callback = p_callback_in;
+    UINT16_TO_STREAM(p, connection_handle);
+    WICED_BT_TRACE("opcode_vsc_read_raw_rssi:%x, buffer[0]:%02x, buffer[1]:%02x\n", opcode_vsc_read_raw_rssi, buffer[0], buffer[1]);
+    bt_status = wiced_bt_dev_vendor_specific_command(opcode_vsc_read_raw_rssi, 2, buffer, (void *) read_raw_rssi_callback);
+    if (bt_status != WICED_BT_PENDING)
+    {
+        return bt_status;
+    }
+    return WICED_BT_SUCCESS;
 }

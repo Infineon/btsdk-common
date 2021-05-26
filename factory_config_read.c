@@ -39,7 +39,7 @@
 #include "wiced_bt_dev.h"
 #include "wiced_bt_trace.h"
 #include "wiced_platform.h"
-#if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW20719B1 || CYW20719B0
+#if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW20719B1 || CYW20719B0 || CYW20739B2
 #include "wiced_hal_eflash.h"
 #elif CYW20706A2 || CYW20735B1  || CYW43012C0 || CYW20835B1 || BTSTACK_VER >= 0x01020000
 #include "wiced_hal_sflash.h"
@@ -87,7 +87,7 @@ uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16
     {
         while((state != SS_DONE) && (offset < (SS_READ_LIMIT)))
         {
-#if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW20719B1 || CYW20719B0
+#if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW20719B1 || CYW20719B0 || CYW20739B2
             if(WICED_SUCCESS != wiced_hal_eflash_read(offset, (uint8_t *)flash_read_buffer, sizeof(flash_read_buffer)))
 #elif CYW20706A2 || CYW20735B1  || CYW43012C0 || CYW20835B1 || BTSTACK_VER >= 0x01020000
             if(sizeof(flash_read_buffer) != wiced_hal_sflash_read(offset, sizeof(flash_read_buffer), (uint8_t *)flash_read_buffer))
