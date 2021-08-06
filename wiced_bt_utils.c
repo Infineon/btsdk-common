@@ -33,7 +33,7 @@
  * Bluetooth WICED Utility functions
  *
  */
-
+#include "wiced_hal_rand.h"
 #include "wiced_bt_utils.h"
 #include "string.h"
 #include "wiced_bt_dev.h"
@@ -448,4 +448,15 @@ wiced_bt_dev_status_t wiced_bt_read_raw_rssi(uint16_t connection_handle, wiced_b
         return bt_status;
     }
     return WICED_BT_SUCCESS;
+}
+
+void wiced_hal_get_pseudo_rand_number_array(uint32_t* randNumberArrayPtr, uint32_t length)
+{
+    uint32_t i;
+    uint32_t *p = randNumberArrayPtr;
+
+    for (i = 0; i < length; i++)
+    {
+        *p++ = wiced_hal_get_pseudo_rand_number();
+    }
 }
