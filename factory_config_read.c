@@ -39,9 +39,9 @@
 #include "wiced_bt_dev.h"
 #include "wiced_bt_trace.h"
 #include "wiced_platform.h"
-#if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW20719B1 || CYW20719B0 || CYW20739B2
+#if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW20719B1 || CYW20719B0 || CYW20739B2 || CYW30739A0
 #include "wiced_hal_eflash.h"
-#elif CYW20706A2 || CYW20735B1  || CYW43012C0 || CYW20835B1 || BTSTACK_VER >= 0x01020000
+#elif CYW20706A2 || CYW20735B1  || CYW43012C0 || CYW20835B1 || BTSTACK_VER >= 0x03000001
 #include "wiced_hal_sflash.h"
 #endif
 #include "wiced_bt_factory_app_config.h"
@@ -73,7 +73,17 @@ typedef enum
 /******************************************************
  *               Function Definitions
  ******************************************************/
-uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16_t buffer_size)
+
+/**
+ * @brief Read record from manufacturer static memory
+ *
+ * @param item_type     - record designated tag
+ * @param buffer        - pointer to the memory buffer to store the record
+ * @param read_length   - number of bytes to read
+ * @param read_offset   - start offset to read the record
+ * @return uint16_t     - number of bytes that was actually read to the buffer
+ */
+uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16_t read_length, uint16_t read_offset)
 {
     uint16_t i;
     uint16_t copy_len = 0;
@@ -87,9 +97,9 @@ uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16
     {
         while((state != SS_DONE) && (offset < (SS_READ_LIMIT)))
         {
-#if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW20719B1 || CYW20719B0 || CYW20739B2
+#if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW20719B1 || CYW20719B0 || CYW20739B2 || CYW30739A0
             if(WICED_SUCCESS != wiced_hal_eflash_read(offset, (uint8_t *)flash_read_buffer, sizeof(flash_read_buffer)))
-#elif CYW20706A2 || CYW20735B1  || CYW43012C0 || CYW20835B1 || BTSTACK_VER >= 0x01020000
+#elif CYW20706A2 || CYW20735B1  || CYW43012C0 || CYW20835B1 || BTSTACK_VER >= 0x03000001
             if(sizeof(flash_read_buffer) != wiced_hal_sflash_read(offset, sizeof(flash_read_buffer), (uint8_t *)flash_read_buffer))
 #else
 #(error unexpected device type)
@@ -158,9 +168,9 @@ uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16
                     break;
                 case SS_TYPE_LEN2:
                     len += byte << 8;
-                    if(buffer_size < len)
+                    if(read_length < len)
                     {
-                        len = buffer_size;
+                        len = read_length;
                     }
                     state = SS_COPY;
                     break;
@@ -175,14 +185,21 @@ uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16
                     }
                     break;
                 case SS_COPY:
-                    if(len-- == 0)
+                    if (0 == read_offset)
                     {
-                        state = SS_DONE;
+                        if(len-- == 0)
+                        {
+                            state = SS_DONE;
+                        }
+                        else
+                        {
+                            *buffer++ = byte;
+                            copy_len++;
+                        }
                     }
                     else
                     {
-                        *buffer++ = byte;
-                        copy_len++;
+                        --read_offset;
                     }
                     break;
                 case SS_DONE:
