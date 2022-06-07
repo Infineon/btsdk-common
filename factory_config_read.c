@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2021, Cypress Semiconductor Corporation (an Infineon company) or
+ * Copyright 2016-2022, Cypress Semiconductor Corporation (an Infineon company) or
  * an affiliate of Cypress Semiconductor Corporation.  All rights reserved.
  *
  * This software, including source code, documentation and related
@@ -39,7 +39,7 @@
 #include "wiced_bt_dev.h"
 #include "wiced_bt_trace.h"
 #include "wiced_platform.h"
-#if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW20719B1 || CYW20719B0 || CYW20739B2 || CYW30739A0
+#if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW30739A0
 #include "wiced_hal_eflash.h"
 #elif CYW20706A2 || CYW20735B1  || CYW43012C0 || CYW20835B1 || BTSTACK_VER >= 0x03000001
 #include "wiced_hal_sflash.h"
@@ -83,7 +83,7 @@ typedef enum
  * @param read_offset   - start offset to read the record
  * @return uint16_t     - number of bytes that was actually read to the buffer
  */
-uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16_t read_length, uint16_t read_offset)
+uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16_t read_length, uint16_t read_offset, uint16_t * record_size)
 {
     uint16_t i;
     uint16_t copy_len = 0;
@@ -91,18 +91,19 @@ uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16
     uint16_t offset = 0;
     static_data_parse_state state = SS_SEEK_FE;
     uint8_t flash_read_buffer[SS_READ_CHUNK];
+    *record_size = 0;
 
     if( (item_type >= WICED_BT_FACTORY_CONFIG_ITEM_FIRST) &&
         (item_type <= WICED_BT_FACTORY_CONFIG_ITEM_LAST))
     {
         while((state != SS_DONE) && (offset < (SS_READ_LIMIT)))
         {
-#if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW20719B1 || CYW20719B0 || CYW20739B2 || CYW30739A0
+#if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW30739A0
             if(WICED_SUCCESS != wiced_hal_eflash_read(offset, (uint8_t *)flash_read_buffer, sizeof(flash_read_buffer)))
 #elif CYW20706A2 || CYW20735B1  || CYW43012C0 || CYW20835B1 || BTSTACK_VER >= 0x03000001
-            if(sizeof(flash_read_buffer) != wiced_hal_sflash_read(offset, sizeof(flash_read_buffer), (uint8_t *)flash_read_buffer))
+            if(sizeof(flash_read_buffer) != wiced_hal_sflash_read(offset, sizeof(flash_read_buffer), flash_read_buffer))
 #else
-#(error unexpected device type)
+#error unexpected device type
 #endif
             {
                 WICED_BT_TRACE("bad flash read\n");
@@ -122,41 +123,13 @@ uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16
                     }
                     break;
                 case SS_SEEK_00_1:
-                    if(byte == 0)
-                    {
-                        state = SS_SEEK_00_2;
-                    }
-                    else
-                    {
-                        state = SS_SEEK_FE;
-                    }
+                    state = (byte == 0) ? SS_SEEK_00_2: SS_SEEK_FE;
                     break;
                 case SS_SEEK_00_2:
-                    if(byte == 0)
-                    {
-                        state = SS_SEEK_TYPE;
-                    }
-                    else
-                    {
-                        state = SS_SEEK_FE;
-                    }
+                    state = (byte == 0) ? SS_SEEK_TYPE : SS_SEEK_FE;
                     break;
                 case SS_SEEK_TYPE:
-                    if(byte == item_type)
-                    {
-                        state = SS_TYPE_LEN1;
-                    }
-                    else
-                    {
-                        if((byte != 0xFF) && (byte > 0x80))
-                        {
-                            state = SS_SKIP_LEN1;
-                        }
-                        else
-                        {
-                            state = SS_DONE;
-                        }
-                    }
+                    state = (byte == item_type) ? SS_TYPE_LEN1 : ((byte != 0xFF) && (byte > 0x80)) ? SS_SKIP_LEN1 : SS_DONE;
                     break;
                 case SS_TYPE_LEN1:
                     len = byte;
@@ -168,11 +141,9 @@ uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16
                     break;
                 case SS_TYPE_LEN2:
                     len += byte << 8;
-                    if(read_length < len)
-                    {
-                        len = read_length;
-                    }
-                    state = SS_COPY;
+                    *record_size = len;
+                    state = (read_offset >= len) ? SS_DONE : SS_COPY;
+                    len = ((read_length + read_offset) <= len) ? read_length : len - read_offset;
                     break;
                 case SS_SKIP_LEN2:
                     len += byte << 8;
@@ -212,4 +183,45 @@ uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16
         }
     }
     return copy_len;
+}
+
+
+/**
+ * @brief Get list of provisioning records from manufacturer static memory
+ *
+ * @param buffer[out]        - pointer to the memory buffer to store the record list
+ * @return uint16_t          - number of found provisioning records
+ */
+uint16_t wiced_bt_factory_config_provisioning_records_get(uint16_t* buffer)
+{
+    uint16_t count = 0;
+    for (uint16_t i = 0; i < WICED_BT_FACTORY_PROVISIONING_RECORD_SIZE; i++)
+    {
+        /* try to read only one first byte of the record to probe */
+        uint16_t record_size;
+        uint8_t byte;
+        if(0 != wiced_bt_factory_config_read((WICED_BT_FACTORY_PROVISIONING_RECORD_OFFSET + i) & 0xff, &byte, 1, 0, &record_size))
+        {
+            *buffer++ = i;
+            count++;
+        }
+    }
+    return count;
+}
+
+
+/**
+ * @brief Get provisioning record from manufacturer static memory
+ *
+ * @param[in]  item_type        - record designated tag
+ * @param[out] buffer           - pointer to the memory buffer to store the record
+ * @param[in]  fragment_length  - number of bytes to read
+ * @param[in]  fragment_offset  - start offset to read the record
+ * @param[out] record_size      - pointer to the output parameter to store total record size
+ * @return uint16_t             - number of bytes that was actually read to the buffer
+ */
+uint16_t wiced_bt_factory_config_provisioning_record_req(uint16_t record_id, uint8_t *buffer, uint16_t fragment_length, uint16_t fragment_offset, uint16_t * record_size)
+{
+    uint8_t item_type = (uint8_t)((record_id + WICED_BT_FACTORY_PROVISIONING_RECORD_OFFSET) & 0xff);
+    return wiced_bt_factory_config_read(item_type, buffer, fragment_length, fragment_offset, record_size);
 }
