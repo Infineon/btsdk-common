@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022, Cypress Semiconductor Corporation (an Infineon company) or
+ * Copyright 2016-2023, Cypress Semiconductor Corporation (an Infineon company) or
  * an affiliate of Cypress Semiconductor Corporation.  All rights reserved.
  *
  * This software, including source code, documentation and related
@@ -39,10 +39,15 @@
 #include "wiced_bt_dev.h"
 #include "wiced_bt_trace.h"
 #include "wiced_platform.h"
+
+#if defined(COMPONENT_CYW20829)
+#include "cy_serial_flash_qspi.h"
+#else
 #if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW30739A0
 #include "wiced_hal_eflash.h"
-#elif CYW20706A2 || CYW20735B1  || CYW43012C0 || CYW20835B1 || BTSTACK_VER >= 0x03000001
+#elif CYW20706A2 || CYW43012C0 || CYW20835B1 || BTSTACK_VER >= 0x03000001
 #include "wiced_hal_sflash.h"
+#endif
 #endif
 #include "wiced_bt_factory_app_config.h"
 
@@ -89,8 +94,15 @@ uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16
     uint16_t copy_len = 0;
     uint16_t len = 0;
     uint16_t offset = 0;
-    static_data_parse_state state = SS_SEEK_FE;
     uint8_t flash_read_buffer[SS_READ_CHUNK];
+#if defined(COMPONENT_CYW20829)
+    static_data_parse_state state = SS_SEEK_FE;
+    uint32_t address = (uint32_t)STATIC_SECTION_START_LMA & 0xFFFFF;
+    uint32_t signature;
+#else
+    static_data_parse_state state = SS_SEEK_FE;
+#endif
+
     *record_size = 0;
 
     if( (item_type >= WICED_BT_FACTORY_CONFIG_ITEM_FIRST) &&
@@ -98,12 +110,16 @@ uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16
     {
         while((state != SS_DONE) && (offset < (SS_READ_LIMIT)))
         {
+#if defined(COMPONENT_CYW20829)
+            if(cy_serial_flash_qspi_read(address+(uint32_t)offset, sizeof(flash_read_buffer), (uint8_t *)flash_read_buffer) != CY_RSLT_SUCCESS)
+#else
 #if CYW20819A1 || CYW20820A1 || CYW20719B2 || CYW20721B2 || CYW30739A0
             if(WICED_SUCCESS != wiced_hal_eflash_read(offset, (uint8_t *)flash_read_buffer, sizeof(flash_read_buffer)))
-#elif CYW20706A2 || CYW20735B1  || CYW43012C0 || CYW20835B1 || BTSTACK_VER >= 0x03000001
+#elif CYW20706A2 || CYW43012C0 || CYW20835B1 || BTSTACK_VER >= 0x03000001
             if(sizeof(flash_read_buffer) != wiced_hal_sflash_read(offset, sizeof(flash_read_buffer), flash_read_buffer))
 #else
 #error unexpected device type
+#endif
 #endif
             {
                 WICED_BT_TRACE("bad flash read\n");
@@ -117,10 +133,29 @@ uint16_t wiced_bt_factory_config_read(uint8_t item_type, uint8_t* buffer, uint16
                 switch(state)
                 {
                 case SS_SEEK_FE:
+#if defined(COMPONENT_CYW20829)
+                    signature = *((uint32_t *)&flash_read_buffer[0]);
+                    if( signature != 0x69666E49 )
+                    {
+                        WICED_BT_TRACE("STATIC SECTION - Invalid Signature\r\n");
+                        return 0;
+                    }
+
+                    signature = *((uint32_t *)&flash_read_buffer[4]);
+                    if( signature != 0x6E6F656E )
+                    {
+                        WICED_BT_TRACE("STATIC SECTION - Invalid Signature\r\n");
+                        return 0;
+                    }
+
+                    i += 7;
+                    state = SS_SEEK_TYPE;
+#else
                     if(byte == 0xfe)
                     {
                         state = SS_SEEK_00_1;
                     }
+#endif
                     break;
                 case SS_SEEK_00_1:
                     state = (byte == 0) ? SS_SEEK_00_2: SS_SEEK_FE;
