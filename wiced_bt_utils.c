@@ -407,10 +407,18 @@ void utl_freebuf(void **p)
 {
     if (*p != NULL)
     {
+
+#if !defined(CYW55500)
         GKI_freebuf(*p);
+#else
+        // TODO in H1;
+        // Refer to CYW55500A0-801, GKI was removed quite some time ago from MPAF (even before H2 TO).
+        // Please use wiced memory APIs for pool/heap allocations in applications
+#endif // !defined(CYW55500)
         *p = NULL;
     }
 }
+
 
 /*******************************************************************
  * Function         wiced_bt_read_raw_rssi
