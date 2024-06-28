@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2023, Cypress Semiconductor Corporation (an Infineon company) or
+ * Copyright 2016-2024, Cypress Semiconductor Corporation (an Infineon company) or
  * an affiliate of Cypress Semiconductor Corporation.  All rights reserved.
  *
  * This software, including source code, documentation and related
@@ -33,7 +33,7 @@
  * Bluetooth WICED Utility functions
  *
  */
-#if !defined(COMPONENT_CYW20829)
+#if !defined(COMPONENT_CYW20829) && !defined(COMPONENT_CYW89829)
 
 #include "wiced_hal_rand.h"
 #include "wiced_bt_utils.h"
@@ -471,4 +471,4 @@ void wiced_hal_get_pseudo_rand_number_array(uint32_t* randNumberArrayPtr, uint32
     }
 }
 
-#endif  // END OF defined(COMPONENT_CYW20829)
+#endif  // END OF defined(COMPONENT_CYW20829) defined(COMPONENT_CYW89829)
